@@ -27,6 +27,6 @@ Input can be found in the similarly-named files.
 
 [day03.livemd](day03.livemd)
 
-- Shared:
-- Part 1:
-- Part 2:
+- Shared: parse into a map of all coords, plus a list of numbers per line (via Regex that returns index and length), plus a few helpers (all neighbors for a given coord, `{start_x, len}` to coordinates generator, `{start_x, len}` to an integer converter)
+- Part 1: find all adjacent (to a non-skippable symbol) numbers, convert, reduce
+- Part 2: find all gear positions, filter only ones that neiboring to more than one digit (it's not a guarantee that it's neighbors with different numbers!), take numbers from relative rows to the gear, check if these numbers neighboring to the gear and filter them accordingly, convert these numbers, filter only results with two integers, calculate
