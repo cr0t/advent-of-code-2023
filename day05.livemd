@@ -1,0 +1,142 @@
+# Day 5: If You Give A Seed A Fertilizer
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.11.3"}
+])
+```
+
+## Input
+
+```elixir
+input = Kino.Input.textarea("Please, paste your input here:")
+```
+
+```elixir
+defmodule Day5Shared do
+  @maps [
+    "seed-to-soil",
+    "soil-to-fertilizer",
+    "fertilizer-to-water",
+    "water-to-light",
+    "light-to-temperature",
+    "temperature-to-humidity",
+    "humidity-to-location"
+  ]
+
+  def parse(input) do
+    input = Kino.Input.read(input)
+
+    [raw_seeds | raw_maps] = String.split(input, "\n\n")
+
+    [_ | seeds] = String.split(raw_seeds, ~r/\s+/)
+
+    seeds = Enum.map(seeds, &String.to_integer/1)
+
+    maps =
+      raw_maps
+      |> Enum.map(fn raw_map ->
+        [raw_name | raw_ranges] = String.split(raw_map, "\n")
+
+        name = String.slice(raw_name, 0..-6)
+
+        ranges =
+          raw_ranges
+          |> Enum.map(fn raw_range ->
+            [dest, source, len] =
+              raw_range
+              |> String.split(~r/\s+/)
+              |> Enum.map(&String.to_integer/1)
+
+            %{
+              dest_start: dest,
+              dest: dest..(dest + len - 1),
+              source_start: source,
+              source: source..(source + len - 1)
+            }
+          end)
+
+        {name, ranges}
+      end)
+      |> Enum.into(%{})
+
+    {seeds, maps}
+  end
+
+  def destination(source_id, maps) do
+    maps
+    |> Enum.find(fn %{source: source_range} -> source_id in source_range end)
+    |> then(fn
+      nil -> source_id
+      map -> map.dest_start - map.source_start + source_id
+    end)
+  end
+
+  def find_lowest_location(seed_id, maps) do
+    Enum.reduce(@maps, seed_id, fn map_name, id ->
+      destination(id, maps[map_name])
+    end)
+  end
+end
+
+# {_seeds, maps} = Day5Shared.parse(input)
+# Day5Shared.destination(96, maps["seed-to-soil"])
+```
+
+## Part 1
+
+```elixir
+defmodule Day5Part1 do
+  import Day5Shared, except: [parse: 1]
+
+  def solve({seeds, maps}) do
+    seeds
+    |> Enum.map(&find_lowest_location(&1, maps))
+    |> Enum.min()
+  end
+end
+
+input
+|> Day5Shared.parse()
+|> Day5Part1.solve()
+```
+
+## Part 2
+
+```elixir
+defmodule Day5Part2 do
+  import Day5Shared, except: [parse: 1]
+
+  @workers_n 64
+
+  def solve({seeds, maps}) do
+    seeds
+    # |> Enum.take(2)
+    |> Stream.chunk_every(2)
+    |> Stream.map(fn [start, finish] ->
+      start..(start + finish - 1)
+      |> Stream.chunk_every(@workers_n)
+      |> Task.async_stream(
+        fn seed_ids ->
+          seed_ids
+          |> Stream.map(&find_lowest_location(&1, maps))
+          |> Enum.min()
+        end,
+        max_concurrency: @workers_n,
+        order: false
+      )
+      |> Stream.map(fn {:ok, n} -> n end)
+      |> Enum.to_list()
+      |> Enum.min()
+    end)
+    |> Enum.to_list()
+    |> Enum.min()
+  end
+end
+
+input
+|> Day5Shared.parse()
+|> Day5Part2.solve()
+
+# 81956384 is the right answer
+```

@@ -36,3 +36,9 @@ Input can be found in the similarly-named files.
 - **Shared:** parse (with regex) into a map of `%{game_id: {winning_numbers, other_numbers}}`, `winning_numbers` and `other_numbers` represented by `MapSet` (to use its `intersection/2` function in the `wins/2` function that returns numbers of overlapping numbers from the given sets)
 - **Part 1:** map over the games and find number of wins in each, calculate power of 2, sum
 - **Part 2:** prepare a helper map `%{game_id: 1}` (`1` is the initial number of copies), go over the games (from 1st to the last) and reduce the `cards_copies` data on each step by adding number of copies to the current ones, sum numbers of copies in the end
+
+[day05.livemd](day05.livemd)
+
+- **Shared:** parse to return input seeds list and map of maps (maps contain information about ranges), plus two helpers – `destination/2` (finds a corresponding value in a given map) and `find_lowest_location/2` (goes over maps in the predefined order and finds a final destination by reducing source+destination)
+- **Part 1:** simply maps `find_lowest_location/2` over the input seeds and finds the minimal
+- **Part 2:** splits the input ranges among a number of parallel processes and finds lowest locations in each piece of data, then finds the minimal. Uses `Stream` to avoid issues with the memory; with 64 workers used ~3800s on Core i7, and ~2070s on M3 Pro.
