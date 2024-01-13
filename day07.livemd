@@ -1,0 +1,211 @@
+# Day 7: Camel Cards
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.11.3"}
+])
+```
+
+## Input
+
+```elixir
+input = Kino.Input.textarea("Please, paste your input here:")
+```
+
+```elixir
+defmodule Day7Shared do
+  def parse(input, j_for_jokers \\ false) do
+    input
+    |> Kino.Input.read()
+    |> String.split("\n")
+    |> Enum.map(fn line ->
+      [raw_hand, bid] = String.split(line, ~r/\s+/)
+
+      hand = parse_hand(raw_hand, j_for_jokers)
+      bid = String.to_integer(bid)
+
+      {raw_hand, hand, bid}
+    end)
+  end
+
+  defp parse_hand(raw_hand, j_for_jokers) do
+    raw_hand
+    |> String.split("", trim: true)
+    |> Enum.map(fn card ->
+      case card do
+        "2" -> 2
+        "3" -> 3
+        "4" -> 4
+        "5" -> 5
+        "6" -> 6
+        "7" -> 7
+        "8" -> 8
+        "9" -> 9
+        "T" -> 10
+        "J" -> if(j_for_jokers, do: 1, else: 11)
+        "Q" -> 12
+        "K" -> 13
+        "A" -> 14
+      end
+    end)
+  end
+end
+
+Day7Shared.parse(input)
+```
+
+## Part 1
+
+```elixir
+defmodule Day7Part1 do
+  def solve(hands) do
+    hands
+    |> Enum.map(fn {raw_hand, hand, bid} -> {raw_hand, hand, kind(hand), bid} end)
+    |> Enum.group_by(fn {_, _, kind, _} -> kind end)
+    |> Enum.map(fn {kind, hands} -> {kind, Enum.sort(hands, &compare/2)} end)
+    |> Enum.into(%{})
+    |> Enum.sort()
+    |> Enum.reduce({0, 1}, fn {_kind, hands}, {total, rank} ->
+      Enum.reduce(hands, {total, rank}, fn {_, _, _, bid}, {total, rank} ->
+        {total + rank * bid, rank + 1}
+      end)
+    end)
+    |> elem(0)
+  end
+
+  defp kind(hand) do
+    case Enum.sort(hand) do
+      [a, a, a, a, a] -> 6
+      [a, a, a, a, _] -> 5
+      [_, a, a, a, a] -> 5
+      [a, a, a, b, b] -> 4
+      [a, a, b, b, b] -> 4
+      [a, a, a, _, _] -> 3
+      [_, _, a, a, a] -> 3
+      [_, a, a, a, _] -> 3
+      [a, a, b, b, _] -> 2
+      [a, a, _, b, b] -> 2
+      [_, a, a, b, b] -> 2
+      [a, a, _, _, _] -> 1
+      [_, a, a, _, _] -> 1
+      [_, _, a, a, _] -> 1
+      [_, _, _, a, a] -> 1
+      _ -> 0
+    end
+  end
+
+  defp compare({_, left, _, _}, {_, right, _, _}), do: left < right
+end
+
+input
+|> Day7Shared.parse()
+|> Day7Part1.solve()
+```
+
+## Part 2
+
+```elixir
+defmodule Day7Part2 do
+  def solve(hands) do
+    hands
+    |> Enum.map(fn {raw_hand, hand, bid} -> {raw_hand, hand, kind(hand), bid} end)
+    # |> Enum.filter(fn {_, hand, _, _} -> 1 in hand end)
+    |> Enum.group_by(fn {_, _, kind, _} -> kind end)
+    |> Enum.map(fn {kind, hands} -> {kind, Enum.sort(hands, &compare/2)} end)
+    |> Enum.into(%{})
+    |> Enum.sort()
+    |> Enum.reduce({0, 1}, fn {_kind, hands}, {total, rank} ->
+      Enum.reduce(hands, {total, rank}, fn {_, _, _, bid}, {total, rank} ->
+        {total + rank * bid, rank + 1}
+      end)
+    end)
+    |> elem(0)
+  end
+
+  defp kind(hand) do
+    {jokers, rest} = Enum.split_with(hand, &(&1 == 1))
+
+    jokers
+    |> length()
+    |> kind(rest)
+  end
+
+  defp kind(0, hand) do
+    case Enum.sort(hand) do
+      # five
+      [a, a, a, a, a] -> 6
+      # four
+      [a, a, a, a, _] -> 5
+      # four
+      [_, a, a, a, a] -> 5
+      # full
+      [a, a, a, b, b] -> 4
+      # full
+      [a, a, b, b, b] -> 4
+      # three
+      [a, a, a, _, _] -> 3
+      # three
+      [_, _, a, a, a] -> 3
+      # three
+      [_, a, a, a, _] -> 3
+      # two
+      [a, a, b, b, _] -> 2
+      # two
+      [a, a, _, b, b] -> 2
+      # two
+      [_, a, a, b, b] -> 2
+      # one
+      [a, a, _, _, _] -> 1
+      # one
+      [_, a, a, _, _] -> 1
+      # one
+      [_, _, a, a, _] -> 1
+      # one
+      [_, _, _, a, a] -> 1
+      _ -> 0
+    end
+  end
+
+  defp kind(1, hand) do
+    case Enum.sort(hand) do
+      [a, a, a, a] -> 6
+      [a, a, a, _] -> 5
+      [_, a, a, a] -> 5
+      [a, a, b, b] -> 4
+      [a, a, _, _] -> 3
+      [_, a, a, _] -> 3
+      [_, _, a, a] -> 3
+      _ -> 1
+    end
+  end
+
+  defp kind(2, hand) do
+    case Enum.sort(hand) do
+      [a, a, a] -> 6
+      [a, a, _] -> 5
+      [_, a, a] -> 5
+      _ -> 3
+    end
+  end
+
+  defp kind(3, hand) do
+    case Enum.sort(hand) do
+      [a, a] -> 6
+      _ -> 5
+    end
+  end
+
+  defp kind(4, _hand), do: 6
+  defp kind(5, _hand), do: 6
+
+  defp compare({_, left, _, _}, {_, right, _, _}), do: left < right
+end
+
+input
+|> Day7Shared.parse(true)
+|> Day7Part2.solve()
+
+# 253273139 too high
+# 26690403 too low
+# 253253225 is the right answer!
+```

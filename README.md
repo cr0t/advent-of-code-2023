@@ -52,3 +52,10 @@ Input can be found in the similarly-named files.
 
 - **Gist:** count distances that more that max one in the time limits range, main difference between parts is in parsing and executing of distance calculation
 - **Shared:** simple distance calculator
+
+[day07.livemd](day07.livemd)
+
+- **Gist:** parse "poker hands", find out the "kind" of a hand, compare by the rank of a "hand"
+- **Shared:** parses into tuples of `{<original hand input>, <numeric hand representation>, <bid>}`
+- **Part 1:** sort the numeric hand and pattern match to get the "kind", comapre, calc, done
+- **Part 2:** consider number of jokers in a hand – it leads to a harder way on determination of a hand's "kind", the rest is similar
