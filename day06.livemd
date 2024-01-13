@@ -1,0 +1,93 @@
+# Day 6: Wait For It
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.11.3"}
+])
+```
+
+## Input
+
+```elixir
+input = Kino.Input.textarea("Please, paste your input here:")
+```
+
+```elixir
+defmodule Day6Shared do
+  def distance(hold_for, time_limit) do
+    time_to_move = time_limit - hold_for
+    speed = hold_for
+
+    speed * time_to_move
+  end
+end
+```
+
+## Part 1
+
+```elixir
+defmodule Day6Part1 do
+  import Day6Shared, only: [distance: 2]
+
+  def solve(input) do
+    input
+    |> parse()
+    |> Enum.map(fn {time_limit, max_distance} ->
+      Enum.count(1..time_limit, fn hold_for ->
+        distance(hold_for, time_limit) > max_distance
+      end)
+    end)
+    |> Enum.reduce(fn ways, acc -> acc * ways end)
+  end
+
+  defp parse(input) do
+    [raw_time, raw_distance] =
+      input
+      |> Kino.Input.read()
+      |> String.split("\n")
+
+    [_ | times] = String.split(raw_time, ~r/\s+/)
+    times = Enum.map(times, &String.to_integer/1)
+
+    [_ | distances] = String.split(raw_distance, ~r/\s+/)
+    distances = Enum.map(distances, &String.to_integer/1)
+
+    Enum.zip(times, distances)
+  end
+end
+
+Day6Part1.solve(input)
+```
+
+## Part 2
+
+```elixir
+defmodule Day6Part2 do
+  import Day6Shared, only: [distance: 2]
+
+  def solve(input) do
+    {time_limit, max_distance} = parse(input)
+
+    Enum.count(1..time_limit, fn hold_for ->
+      distance(hold_for, time_limit) > max_distance
+    end)
+  end
+
+  defp parse(input) do
+    [raw_time, raw_distance] =
+      input
+      |> Kino.Input.read()
+      |> String.split("\n")
+
+    [_ | times] = String.split(raw_time, ~r/\s+/)
+    time = times |> Enum.join() |> String.to_integer()
+
+    [_ | distances] = String.split(raw_distance, ~r/\s+/)
+    distance = distances |> Enum.join() |> String.to_integer()
+
+    {time, distance}
+  end
+end
+
+Day6Part2.solve(input)
+```

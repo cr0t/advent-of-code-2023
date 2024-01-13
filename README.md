@@ -47,3 +47,8 @@ Input can be found in the similarly-named files.
 - **Shared:** parse to return input seeds list and map of maps (maps contain information about ranges), plus two helpers – `destination/2` (finds a corresponding value in a given map) and `find_lowest_location/2` (goes over maps in the predefined order and finds a final destination by reducing source+destination)
 - **Part 1:** simply maps `find_lowest_location/2` over the input seeds and finds the minimal
 - **Part 2:** splits the input ranges among a number of parallel processes and finds lowest locations in each piece of data, then finds the minimal. Uses `Stream` to avoid issues with the memory; with 64 workers used ~3800s on Core i7, and ~2070s on M3 Pro.
+
+[day06.livemd](day06.livemd)
+
+- **Gist:** count distances that more that max one in the time limits range, main difference between parts is in parsing and executing of distance calculation
+- **Shared:** simple distance calculator
