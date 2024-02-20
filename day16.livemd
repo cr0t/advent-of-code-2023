@@ -1,0 +1,162 @@
+# Day 16: The Floor Will Be Lava
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.12.0"}
+])
+```
+
+## Input
+
+```elixir
+input = Kino.Input.textarea("Please, paste your input here:")
+```
+
+```elixir
+defmodule Day16Shared do
+  @default_energies %{up: false, right: false, down: false, left: false}
+
+  def parse(input) do
+    input
+    |> Kino.Input.read()
+    |> String.split("\n")
+    |> Enum.with_index()
+    |> Enum.reduce(%{}, fn {row, y}, tiles ->
+      row
+      |> String.split("", trim: true)
+      |> Enum.with_index()
+      |> Enum.reduce(tiles, fn {tile, x}, tiles ->
+        tiles
+        |> Map.put({x, y}, tile)
+        |> Map.update(:max_x, x, &max(&1, x))
+        |> Map.update(:max_y, y, &max(&1, y))
+      end)
+    end)
+  end
+
+  def trace(to_check, tiles_map), do: trace(to_check, tiles_map, %{})
+
+  def trace([], _tiles_map, energized), do: energized
+
+  def trace([{dir, pos} | to_check], tiles_map, energized) do
+    next =
+      tiles_map
+      |> next({dir, pos})
+      |> Enum.reject(fn {nxt_dir, nxt_pos} ->
+        get_in(energized, [nxt_pos, nxt_dir])
+      end)
+
+    new_energized =
+      Map.update(energized, pos, @default_energies, fn directions ->
+        put_in(directions, [dir], true)
+      end)
+
+    trace(next ++ to_check, tiles_map, new_energized)
+  end
+
+  def next(tiles_map, {direction, from}) do
+    to = till(direction, from)
+
+    case Map.get(tiles_map, to) do
+      nil -> []
+      "." -> continue(to, direction)
+      "-" -> split("-", to, direction)
+      "|" -> split("|", to, direction)
+      m -> mirror(m, to, direction)
+    end
+  end
+
+  defp till(:up, {x, y}), do: {x, y - 1}
+  defp till(:right, {x, y}), do: {x + 1, y}
+  defp till(:down, {x, y}), do: {x, y + 1}
+  defp till(:left, {x, y}), do: {x - 1, y}
+
+  defp continue(pos, dir), do: [{dir, pos}]
+
+  defp split("-", pos, dir) when dir in [:right, :left], do: [{dir, pos}]
+  defp split("-", pos, :up), do: [{:left, pos}, {:right, pos}]
+  defp split("-", pos, :down), do: [{:left, pos}, {:right, pos}]
+
+  defp split("|", pos, dir) when dir in [:up, :down], do: [{dir, pos}]
+  defp split("|", pos, :right), do: [{:up, pos}, {:down, pos}]
+  defp split("|", pos, :left), do: [{:up, pos}, {:down, pos}]
+
+  defp mirror("/", pos, :up), do: [{:right, pos}]
+  defp mirror("/", pos, :right), do: [{:up, pos}]
+  defp mirror("/", pos, :down), do: [{:left, pos}]
+  defp mirror("/", pos, :left), do: [{:down, pos}]
+
+  defp mirror("\\", pos, :up), do: [{:left, pos}]
+  defp mirror("\\", pos, :right), do: [{:down, pos}]
+  defp mirror("\\", pos, :down), do: [{:right, pos}]
+  defp mirror("\\", pos, :left), do: [{:up, pos}]
+end
+
+input
+|> Day16Shared.parse()
+|> Day16Shared.next({:down, {0, 0}})
+```
+
+## Part 1
+
+```elixir
+defmodule Day16Part1 do
+  import Day16Shared, except: [parse: 1]
+
+  @start {:right, {-1, 0}}
+
+  def solve(tiles_map) do
+    [@start]
+    |> trace(tiles_map)
+    |> Enum.count()
+    |> Kernel.-(1)
+  end
+end
+
+input
+|> Day16Shared.parse()
+|> Day16Part1.solve()
+
+# 7472 is the right answer
+```
+
+## Part 2
+
+```elixir
+defmodule Day16Part2 do
+  import Day16Shared, except: [parse: 1]
+
+  @workers_n System.schedulers_online()
+
+  def solve(%{max_x: mx, max_y: my} = tiles_map) do
+    # calculate all the possible starts (points outside the map)
+    ups = for x <- 0..mx, y = mx + 1, do: {:up, {x, y}}
+    rights = for y <- 0..my, x = -1, do: {:right, {x, y}}
+    downs = for x <- 0..mx, y = -1, do: {:down, {x, y}}
+    lefts = for y <- 0..my, x = mx + 1, do: {:left, {x, y}}
+    starts = ups ++ rights ++ downs ++ lefts
+
+    # calculate all the energized tiles for each start and find maximum
+    starts
+    |> Enum.chunk_every(@workers_n)
+    |> Task.async_stream(
+      fn starts ->
+        starts
+        |> Enum.map(&trace([&1], tiles_map))
+        |> Enum.map(&Enum.count/1)
+      end,
+      max_concurrency: @workers_n
+    )
+    |> Enum.map(&elem(&1, 1))
+    |> List.flatten()
+    |> Enum.max()
+    |> Kernel.-(1)
+  end
+end
+
+input
+|> Day16Shared.parse()
+|> Day16Part2.solve()
+
+# 7716 is the right answer
+```

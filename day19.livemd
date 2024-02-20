@@ -1,0 +1,118 @@
+# Day 19: Aplenty
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.12.0"}
+])
+```
+
+## Input
+
+```elixir
+input = Kino.Input.textarea("Please, paste your input here:")
+```
+
+```elixir
+defmodule Day19Shared do
+  def parse(input) do
+    [flows_raw, parts_raw] =
+      input
+      |> Kino.Input.read()
+      |> String.split("\n\n")
+
+    flows =
+      flows_raw
+      |> String.split("\n")
+      |> Enum.map(fn flow_raw ->
+        [name, rules_raw] =
+          Regex.run(~r/(\w{1,3}){([\w,:><]+)}/, flow_raw, capture: :all_but_first)
+
+        rules =
+          rules_raw
+          |> String.split(",")
+          |> Enum.map(fn rule_raw ->
+            if String.match?(rule_raw, ~r/:/) do
+              [cat, op, value, ok_ret] =
+                Regex.run(~r/([xmas]{1})([<>]{1})(\d+):(\w{1,3})/, rule_raw,
+                  capture: :all_but_first
+                )
+
+              {cat, op, String.to_integer(value), ok_ret}
+            else
+              rule_raw
+            end
+          end)
+
+        {name, rules}
+      end)
+      |> Map.new()
+
+    parts =
+      parts_raw
+      |> String.split("\n")
+      |> Enum.map(fn part_raw ->
+        ~r/(\d+)/
+        |> Regex.scan(part_raw, capture: :all_but_first)
+        |> List.flatten()
+        |> Enum.map(&String.to_integer/1)
+        |> List.to_tuple()
+      end)
+
+    {flows, parts}
+  end
+end
+
+Day19Shared.parse(input)
+```
+
+## Part 1
+
+```elixir
+defmodule Day19Part1 do
+  def solve({flows, parts}) do
+    parts
+    |> Enum.map(&{process(&1, flows), &1})
+    |> Enum.filter(&(elem(&1, 0) == "A"))
+    |> Enum.reduce(0, fn {_, {x, m, a, s}}, sum -> sum + x + m + a + s end)
+  end
+
+  defp process(part, flows), do: process(part, flows, "in")
+
+  defp process({x, m, a, s} = part, flows, flow) do
+    next =
+      Enum.find_value(flows[flow], fn
+        {cat, op, threshold, ok} ->
+          case cat do
+            "x" -> compare(op, x, threshold) and ok
+            "m" -> compare(op, m, threshold) and ok
+            "a" -> compare(op, a, threshold) and ok
+            "s" -> compare(op, s, threshold) and ok
+          end
+
+        otherwise ->
+          otherwise
+      end)
+
+    if next not in ~w[A R] do
+      process(part, flows, next)
+    else
+      next
+    end
+  end
+
+  defp compare(">", a, b), do: a > b
+  defp compare("<", a, b), do: a < b
+end
+
+input
+|> Day19Shared.parse()
+|> Day19Part1.solve()
+
+# 331208 is the right answer
+```
+
+## Part 2
+
+```elixir
+
+```

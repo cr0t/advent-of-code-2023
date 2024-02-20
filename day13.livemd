@@ -1,0 +1,203 @@
+# Day 13: Point of Incidence
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.12.0"}
+])
+```
+
+## Input
+
+```elixir
+input = Kino.Input.textarea("Please, paste your input here:")
+```
+
+```elixir
+defmodule Day13Shared do
+  def parse(input) do
+    input
+    |> Kino.Input.read()
+    |> String.split("\n\n")
+    |> Enum.map(&parse_pattern/1)
+  end
+
+  defp parse_pattern(pattern) do
+    pattern
+    |> String.split("\n")
+    |> Enum.with_index()
+    |> Enum.reduce(%{max_x: 0, max_y: 0}, fn {row, y}, map ->
+      row
+      |> String.split("", trim: true)
+      |> Enum.with_index()
+      |> Enum.reduce(map, fn {el, x}, map ->
+        map
+        |> Map.put({x, y}, el)
+        |> Map.update(:max_x, x, &max(&1, x))
+        |> Map.update(:max_y, y, &max(&1, y))
+      end)
+    end)
+  end
+
+  def vertical_edge(%{max_x: mx, max_y: my} = map, folding_x) do
+    to_left = a_side(folding_x, mx)
+    to_right = b_side(folding_x, mx)
+
+    left =
+      Enum.map(0..my, fn y ->
+        Enum.reduce(to_left, [], fn {x, delta}, rocks ->
+          if Map.get(map, {x, y}) == "#", do: [delta | rocks], else: rocks
+        end)
+        |> Enum.reverse()
+      end)
+
+    right =
+      Enum.map(0..my, fn y ->
+        Enum.reduce(to_right, [], fn {x, delta}, rocks ->
+          if Map.get(map, {x, y}) == "#", do: [delta | rocks], else: rocks
+        end)
+      end)
+
+    left == right
+  end
+
+  def horizontal_edge(%{max_x: mx, max_y: my} = map, folding_y) do
+    to_top = a_side(folding_y, my)
+    to_bottom = b_side(folding_y, my)
+
+    top =
+      Enum.map(0..mx, fn x ->
+        Enum.reduce(to_top, [], fn {y, delta}, rocks ->
+          if Map.get(map, {x, y}) == "#", do: [delta | rocks], else: rocks
+        end)
+        |> Enum.reverse()
+      end)
+
+    bottom =
+      Enum.map(0..mx, fn x ->
+        Enum.reduce(to_bottom, [], fn {y, delta}, rocks ->
+          if Map.get(map, {x, y}) == "#", do: [delta | rocks], else: rocks
+        end)
+      end)
+
+    top == bottom
+  end
+
+  defp a_side(coord, max) do
+    side_steps = min(max - coord + 1, coord)
+
+    (coord - side_steps)..(coord - 1)
+    |> Enum.reverse()
+    |> Enum.with_index()
+    |> Enum.reverse()
+  end
+
+  defp b_side(coord, max) do
+    side_steps = min(max - coord + 1, coord)
+
+    coord..(coord + side_steps - 1)
+    |> Enum.with_index()
+  end
+end
+
+Day13Shared.parse(input)
+```
+
+## Part 1
+
+```elixir
+defmodule Day13Part1 do
+  import Day13Shared, except: [parse: 1]
+
+  def solve(patterns) do
+    patterns
+    |> Enum.map(fn %{max_x: mx, max_y: my} = map ->
+      vert = Enum.find(1..mx, &vertical_edge(map, &1))
+      hori = Enum.find(1..my, &horizontal_edge(map, &1))
+
+      {vert, hori}
+    end)
+    |> IO.inspect()
+    |> Enum.reduce(0, fn
+      {v, nil}, acc -> acc + v
+      {nil, h}, acc -> acc + h * 100
+    end)
+  end
+end
+
+input
+|> Day13Shared.parse()
+|> Day13Part1.solve()
+
+# 29213 is the right answer
+```
+
+## Part 2
+
+```elixir
+defmodule Day13Part2 do
+  import Day13Shared, except: [parse: 1]
+
+  def solve(patterns) do
+    patterns
+    |> Enum.map(fn %{max_x: mx, max_y: my} = map ->
+      vert = Enum.find(1..mx, &vertical_edge(map, &1))
+      hori = Enum.find(1..my, &horizontal_edge(map, &1))
+      vert? = is_nil(hori)
+
+      new_vert_hori =
+        map
+        |> desmudge(vert?)
+        |> Enum.reject(&(&1 == {vert, nil} or &1 == {nil, hori}))
+
+      case new_vert_hori do
+        [] -> {vert, hori}
+        [new_v_h | _] -> new_v_h
+      end
+    end)
+    |> Enum.reduce(0, fn
+      {v, nil}, acc -> acc + v
+      {nil, h}, acc -> acc + h * 100
+    end)
+  end
+
+  defp desmudge(%{max_x: mx, max_y: my} = map, vert?) do
+    for y <- 0..my, x <- 0..mx do
+      new_map = boom(map, {x, y})
+
+      if vert? do
+        hori = Enum.find(1..my, &horizontal_edge(new_map, &1))
+
+        if is_nil(hori) do
+          {Enum.find(1..mx, &vertical_edge(new_map, &1)), nil}
+        else
+          {nil, hori}
+        end
+      else
+        vert = Enum.find(1..mx, &vertical_edge(new_map, &1))
+
+        if is_nil(vert) do
+          {nil, Enum.find(1..my, &horizontal_edge(new_map, &1))}
+        else
+          {vert, nil}
+        end
+      end
+    end
+    |> Enum.filter(fn {v, h} -> not is_nil(v) or not is_nil(h) end)
+  end
+
+  defp boom(map, pos) do
+    map
+    |> Map.get_and_update(pos, fn
+      "#" -> {"#", "."}
+      "." -> {".", "#"}
+    end)
+    |> elem(1)
+  end
+end
+
+input
+|> Day13Shared.parse()
+|> Day13Part2.solve()
+
+# 29684 is too low
+```

@@ -1,0 +1,200 @@
+# Day 20: Pulse Propagation
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.12.0"},
+  {:libgraph, "~> 0.16.0"}
+])
+```
+
+## Input
+
+```elixir
+input = Kino.Input.textarea("Please, paste your input here:")
+```
+
+```elixir
+defmodule Day20Shared do
+  def parse(input) do
+    modules =
+      input
+      |> Kino.Input.read()
+      |> String.split("\n")
+      |> Enum.map(fn module_raw ->
+        [type_raw, name, outs_raw] =
+          Regex.run(~r/([%&]*)(\w+) -> ([\w, ]+)$/, module_raw, capture: :all_but_first)
+
+        outs = String.split(outs_raw, ~r/[,\s+]/, trim: true)
+
+        config =
+          case type_raw do
+            "" -> %{type: :cast, outs: outs}
+            "%" -> %{type: :flip, outs: outs, state: :off}
+            "&" -> %{type: :conj, outs: outs, state: %{}}
+          end
+
+        {name, config}
+      end)
+
+    {machinezy(modules), graphy(modules)}
+  end
+
+  # Sets inputs and initial state for the conjuction modules, but leaves the rest of
+  # configuration the same as parsed
+  defp machinezy(modules) do
+    modules
+    |> Enum.map(fn
+      {name, %{type: :conj} = config} ->
+        inputs =
+          modules
+          |> Enum.filter(fn {_, %{outs: outs}} -> Enum.member?(outs, name) end)
+          |> Enum.map(fn {out_name, _} -> out_name end)
+
+        state =
+          inputs
+          |> Enum.map(fn inp -> {inp, :low} end)
+          |> Map.new()
+
+        {name, %{config | state: state}}
+
+      otherwise ->
+        otherwise
+    end)
+    |> Map.new()
+  end
+
+  # Generates a graph with the vertices and edges for the given machine (not sure if needed)
+  defp graphy(modules) do
+    module_names = Enum.map(modules, &elem(&1, 0))
+    graph = Graph.new() |> Graph.add_vertices(module_names)
+
+    Enum.reduce(modules, graph, fn {name, %{outs: outs}}, graph ->
+      Enum.reduce(outs, graph, fn out, graph ->
+        Graph.add_edge(graph, name, out)
+      end)
+    end)
+  end
+end
+
+Day20Shared.parse(input)
+```
+
+## Part 1
+
+```elixir
+defmodule Day20Part1 do
+  @init_pulses [{"button", :low, "broadcaster"}]
+  @init_counts {0, 0}
+  @steps 1000
+
+  def solve({machine, _graph}) do
+    1..@steps
+    |> Enum.reduce({machine, @init_counts}, fn _step, {machine, counts} ->
+      process(@init_pulses, machine, counts)
+    end)
+    # |> IO.inspect()
+    |> then(fn {_machine, {low_n, high_n}} ->
+      low_n * high_n
+    end)
+  end
+
+  defp process([], machine, counts), do: {machine, counts}
+
+  defp process([pulse | queue], machine, {low_n, high_n}) do
+    {new_machine, new_pulses} = update_machine(pulse, machine)
+    # IO.inspect(pulse, label: "pulse")
+
+    new_counts =
+      if elem(pulse, 1) == :low do
+        {low_n + 1, high_n}
+      else
+        {low_n, high_n + 1}
+      end
+
+    process(queue ++ new_pulses, new_machine, new_counts)
+  end
+
+  defp update_machine({from_module, pulse_type, to_module}, machine) do
+    case Map.get(machine, to_module) do
+      %{type: :cast} = module ->
+        next_pulses = Enum.map(module[:outs], fn out -> {to_module, pulse_type, out} end)
+
+        {machine, next_pulses}
+
+      %{type: :flip} = module ->
+        # Flip-flop modules (prefix %) are either on or off; they are initially off.
+        # If a flip-flop module receives a high pulse, it is ignored and nothing happens.
+        # However, if a flip-flop module receives a low pulse, it flips between on and off.
+        # If it was off, it turns on and sends a high pulse.
+        # If it was on, it turns off and sends a low pulse.
+
+        if pulse_type == :high do
+          {machine, []}
+        else
+          module = flip(module)
+
+          next_pulses =
+            Enum.map(module[:outs], fn out ->
+              if module[:state] == :on do
+                {to_module, :high, out}
+              else
+                {to_module, :low, out}
+              end
+            end)
+
+          {%{machine | to_module => module}, next_pulses}
+        end
+
+      %{type: :conj, state: state} = module ->
+        # Conjunction modules (prefix &) remember the type of the most recent pulse received
+        # from each of their connected input modules; they initially default to remembering
+        # a low pulse for each input.
+        # When a pulse is received, the conjunction module first updates its memory for
+        # that input. Then, if it remembers high pulses for all inputs, it sends a low pulse;
+        # otherwise, it sends a high pulse.
+
+        state = %{state | from_module => pulse_type}
+        module = %{module | state: state}
+        signal = invertor_will_send(state)
+
+        next_pulses = Enum.map(module[:outs], fn out -> {to_module, signal, out} end)
+
+        {%{machine | to_module => module}, next_pulses}
+
+      nil ->
+        {machine, []}
+    end
+  end
+
+  defp flip(%{state: :off} = module), do: %{module | state: :on}
+  defp flip(%{state: :on} = module), do: %{module | state: :off}
+
+  defp invertor_will_send(state) do
+    if Enum.all?(state, fn {_, type} -> type == :high end) do
+      :low
+    else
+      :high
+    end
+  end
+end
+
+input
+|> Day20Shared.parse()
+|> Day20Part1.solve()
+
+# 743871576 is the right answer
+```
+
+## Part 2
+
+```elixir
+defmodule Day20Part2 do
+  # See https://elixirforum.com/t/advent-of-code-2023-day-20/60474 for solution ideas
+  # Maybe use https://csacademy.com/app/graph_editor/ to find cycles in the input
+  # Kostya's result: 243_221_023_462_303
+end
+
+# input
+# |> Day20Shared.parse()
+# |> Day20Part2.solve()
+```

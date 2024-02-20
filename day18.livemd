@@ -1,0 +1,135 @@
+# Day 18: Lavaduct Lagoon
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.12.0"}
+])
+```
+
+## Input
+
+```elixir
+input = Kino.Input.textarea("Please, paste your input here:")
+```
+
+```elixir
+defmodule Day18Shared do
+  def parse(input) do
+    input
+    |> Kino.Input.read()
+    |> String.split("\n")
+    |> Enum.map(fn row ->
+      [dir, meters, color] =
+        Regex.run(
+          ~r/^([URDL])\s(\d+)\s\(#(.{6})\)$/,
+          row,
+          capture: :all_but_first
+        )
+
+      {dir, String.to_integer(meters), color}
+    end)
+  end
+
+  # Returns number of points (to be use in perimeter length calculation), and next vertex
+  def dig({x, y}, "U", length), do: {Range.size((y - length)..y), {x, y - length}}
+  def dig({x, y}, "R", length), do: {Range.size((x + length)..x), {x + length, y}}
+  def dig({x, y}, "D", length), do: {Range.size((y + length)..y), {x, y + length}}
+  def dig({x, y}, "L", length), do: {Range.size((x - length)..x), {x - length, y}}
+
+  # Used https://en.wikipedia.org/wiki/Shoelace_formula that gives area by the given
+  # vertices, then to the given area added number of points in perimeter, plus extra 1
+  def area(vertices_n_extra) do
+    perimeter = Enum.reduce(vertices_n_extra, 0, fn {len, _}, acc -> acc + len - 1 end)
+
+    {xs, ys} =
+      Enum.reduce(vertices_n_extra, {[], []}, fn {_, {x, y}}, {xs, ys} ->
+        {[x | xs], [y | ys]}
+      end)
+
+    xs = Enum.reverse(xs)
+    ys = Enum.reverse(ys)
+
+    [xh | xt] = xs
+    [yh | yt] = ys
+
+    pos = Enum.zip(xs, yt ++ [yh]) |> Enum.map(fn {x, y} -> x * y end) |> Enum.sum()
+    neg = Enum.zip(ys, xt ++ [xh]) |> Enum.map(fn {y, x} -> x * y end) |> Enum.sum()
+
+    abs(pos - neg)
+    |> Kernel.+(perimeter)
+    |> Kernel.div(2)
+    |> Kernel.+(1)
+  end
+end
+
+Day18Shared.parse(input)
+```
+
+## Part 1
+
+```elixir
+defmodule Day18Part1 do
+  import Day18Shared, except: [parse: 1]
+
+  @start {0, 0}
+
+  def solve(commands) do
+    commands
+    |> Enum.reduce({@start, []}, fn {dir, length, _color}, {from, vertices} ->
+      {points_n, next_vertex} = dig(from, dir, length)
+
+      {next_vertex, [{points_n, next_vertex} | vertices]}
+    end)
+    |> elem(1)
+    |> area()
+  end
+end
+
+input
+|> Day18Shared.parse()
+|> Day18Part1.solve()
+
+# 48652 is the right answer
+```
+
+## Part 2
+
+```elixir
+defmodule Day18Part2 do
+  import Day18Shared, except: [parse: 1]
+
+  @start {0, 0}
+
+  def solve(commands) do
+    commands
+    |> Enum.map(&convert_command/1)
+    |> Enum.reduce({@start, []}, fn {dir, length}, {from, vertices} ->
+      {points_n, next_vertex} = dig(from, dir, length)
+
+      {next_vertex, [{points_n, next_vertex} | vertices]}
+    end)
+    |> elem(1)
+    |> area()
+  end
+
+  defp convert_command({_, _, color}) do
+    {len, direction} = String.split_at(color, 5)
+
+    direction =
+      case direction do
+        "0" -> "R"
+        "1" -> "D"
+        "2" -> "L"
+        "3" -> "U"
+      end
+
+    {direction, String.to_integer(len, 16)}
+  end
+end
+
+input
+|> Day18Shared.parse()
+|> Day18Part2.solve()
+
+# 45757884535661 is the right answer
+```

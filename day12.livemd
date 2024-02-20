@@ -1,0 +1,112 @@
+# Day 12: Hot Springs
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.12.0"}
+])
+```
+
+## Input
+
+```elixir
+input = Kino.Input.textarea("Please, paste your input here:")
+```
+
+```elixir
+defmodule Day12Shared do
+  def parse(input) do
+    input
+    |> Kino.Input.read()
+    |> String.split("\n")
+    |> Enum.map(fn row ->
+      [raw_positions, raw_groups] = String.split(row, ~r/\s+/)
+
+      # positions = String.split(raw_positions, "", trim: true)
+      groups = String.split(raw_groups, ",", trim: true) |> Enum.map(&String.to_integer/1)
+
+      {raw_positions, groups}
+    end)
+  end
+end
+
+Day12Shared.parse(input)
+```
+
+## Part 1
+
+```elixir
+defmodule Day12Part1 do
+  def solve(springs) do
+    springs
+    |> Enum.map(fn {positions, groups} ->
+      clean = String.trim(positions, ".")
+      len = String.length(clean)
+
+      {clean, len, groups}
+    end)
+  end
+end
+
+input
+|> Day12Shared.parse()
+|> Day12Part1.solve()
+```
+
+```elixir
+# defmodule Day12Part1 do
+#   def solve(springs) do
+#     springs
+#     |> Enum.map(fn {positions, groups} ->
+#       clean = clear(positions)
+
+#       {clean, typed(clean), groups}
+#     end)
+#     |> Enum.map(fn {positions, typed, groups} ->
+#       damaged_regions = Enum.reduce(typed, [], fn
+#         {:damaged, s}, sizes -> [s | sizes]
+#         _, sizes -> sizes
+#       end)
+#       |> IO.inspect()
+
+#       groups = Enum.reduce(damaged_regions, groups, fn size, groups ->
+#         List.delete(groups, size)
+#       end)
+
+#       typed = Enum.reduce(damaged_regions, typed, fn size, typed ->
+#         Keyword.delete(typed, :damaged, size)
+#       end)
+
+#       min = min_field(groups)
+#       len = Enum.reduce(typed, 0, fn {_, size}, acc -> size + acc end)
+
+#       {positions, typed, groups, min, len}
+#     end)
+#   end
+
+#   defp clear(positions), do: String.trim(positions, ".")
+
+#   defp typed(positions) do
+#     positions
+#     |> String.split(".", trim: true)
+#     |> Enum.map(fn group ->
+#       cond do
+#         String.match?(group, ~r/^\?+$/) -> {:unknown, String.length(group)}
+#         String.match?(group, ~r/^\#+$/) -> {:damaged, String.length(group)}
+#         true -> {:mixed, String.length(group)}
+#       end
+#     end)
+#   end
+
+#   defp min_field(groups) do
+#     n_groups = length(groups)
+
+#     groups
+#     |> Enum.sum()
+#     |> Kernel.+(n_groups - 1)
+#   end
+# end
+
+# input
+# |> Day12Shared.parse()
+# |> Day12Part1.solve()
+```

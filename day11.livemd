@@ -1,0 +1,171 @@
+# Day 11: Cosmic Expansion
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.11.3"}
+])
+```
+
+## Input
+
+```elixir
+input = Kino.Input.textarea("Please, paste your input here:")
+```
+
+```elixir
+defmodule Day11Shared do
+  def parse(input, expansion_rate) do
+    input
+    |> Kino.Input.read()
+    |> initial_parse()
+    |> then(fn %{max_x: mx, max_y: my} = init_map ->
+      # {{0, 2}, 3},
+      # {{1, 5}, 5},
+      # {{6, 4}, 4},
+      # {{7, 1}, 2},
+      # {{4, 9}, 9},
+      # {{3, 0}, 1},
+      # {{7, 8}, 7},
+      # {{9, 6}, 6},
+      # {{0, 9}, 8}
+
+      x_shifts =
+        Enum.reduce(0..mx, [], fn tx, x_shifts ->
+          if Enum.all?(0..my, fn ty -> Map.get(init_map, {tx, ty}) == "." end) do
+            [tx | x_shifts]
+          else
+            x_shifts
+          end
+        end)
+        |> Enum.reverse()
+        |> Enum.chunk_every(2, 1)
+        |> Enum.with_index(1)
+
+      y_shifts =
+        Enum.reduce(0..my, [], fn ty, y_shifts ->
+          if Enum.all?(0..mx, fn tx -> Map.get(init_map, {tx, ty}) == "." end) do
+            [ty | y_shifts]
+          else
+            y_shifts
+          end
+        end)
+        |> Enum.reverse()
+        |> Enum.chunk_every(2, 1)
+        |> Enum.with_index(1)
+
+      init_map
+      |> Enum.filter(fn {k, _} -> k not in [:max_x, :max_y] end)
+      |> Enum.map(fn {{x, y}, v} ->
+        {_, x_multiplier} =
+          Enum.find(x_shifts, {nil, 0}, fn
+            {[a, b], _} -> x in a..b
+            {[a], _} -> x > a
+          end)
+
+        {_, y_multiplier} =
+          Enum.find(y_shifts, {nil, 0}, fn
+            {[a, b], _} -> y in a..b
+            {[a], _} -> y > a
+          end)
+
+        x_shift = expansion_rate * x_multiplier
+        y_shift = expansion_rate * y_multiplier
+
+        {{x + x_shift, y + y_shift}, v}
+      end)
+    end)
+    |> Enum.filter(fn {k, v} -> k not in [:max_x, :max_y] && v != "." end)
+  end
+
+  defp initial_parse(input) do
+    input
+    |> String.split("\n")
+    |> Enum.with_index()
+    |> Enum.reduce({%{max_x: 0, max_y: 0}, 0}, fn {row, y}, {map, galaxy_n} ->
+      row
+      |> String.split("", trim: true)
+      |> Enum.with_index()
+      |> Enum.reduce({map, galaxy_n}, fn {tile, x}, {map, galaxy_n} ->
+        new_galaxy_n = if tile == "#", do: galaxy_n + 1, else: galaxy_n
+        tile = if tile == "#", do: new_galaxy_n, else: tile
+
+        new_map =
+          map
+          |> Map.put({x, y}, tile)
+          |> Map.update(:max_x, x, &max(&1, x))
+          |> Map.update(:max_y, y, &max(&1, y))
+
+        {new_map, new_galaxy_n}
+      end)
+    end)
+    |> elem(0)
+  end
+end
+
+Day11Shared.parse(input, 1)
+```
+
+## Part 1
+
+```elixir
+defmodule Day11Part1 do
+  def solve(map) do
+    galaxies =
+      Enum.filter(map, fn {k, v} ->
+        k not in [:max_x, :max_y] && v != "."
+      end)
+
+    paths =
+      for a <- galaxies, b <- galaxies, a != b do
+        {{ax, ay}, an} = a
+        {{bx, by}, bn} = b
+
+        {abs(ax - bx) + abs(ay - by), {an, bn}}
+      end
+
+    # Pathes doubled, so divide the sum by 2 in the end
+    paths
+    |> Enum.map(&elem(&1, 0))
+    |> Enum.sum()
+    |> Kernel.div(2)
+  end
+end
+
+input
+|> Day11Shared.parse(1)
+|> Day11Part1.solve()
+```
+
+## Part 2
+
+```elixir
+defmodule Day11Part2 do
+  def solve(map) do
+    galaxies =
+      Enum.filter(map, fn {k, v} ->
+        k not in [:max_x, :max_y] && v != "."
+      end)
+
+    paths =
+      for a <- galaxies, b <- galaxies, a != b do
+        {{ax, ay}, an} = a
+        {{bx, by}, bn} = b
+
+        {abs(ax - bx) + abs(ay - by), {an, bn}}
+      end
+
+    # Pathes doubled, so divide the sum by 2 in the end
+    paths
+    |> Enum.map(&elem(&1, 0))
+    |> Enum.sum()
+    |> Kernel.div(2)
+  end
+end
+
+input
+|> Day11Shared.parse(1_000_000 - 1)
+|> Day11Part2.solve()
+
+# 82000292 is too low
+# 634324905172 is the right
+```

@@ -1,0 +1,107 @@
+# Day 9: Mirage Maintenance
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.11.3"}
+])
+```
+
+## Input
+
+```elixir
+input = Kino.Input.textarea("Please, paste your input here:")
+```
+
+```elixir
+defmodule Day9Shared do
+  def parse(input) do
+    input
+    |> Kino.Input.read()
+    |> String.split("\n")
+    |> Enum.map(fn raw_values ->
+      raw_values
+      |> String.split(~r/\s+/)
+      |> Enum.map(&String.to_integer/1)
+    end)
+  end
+
+  def extrapolate(history) do
+    history
+    |> Stream.unfold(fn values ->
+      next = diff(values)
+
+      if Enum.all?(values, &(&1 == 0)) do
+        nil
+      else
+        {values, next}
+      end
+    end)
+    |> Enum.to_list()
+  end
+
+  def diff([head | sequence]) do
+    sequence
+    |> Enum.reduce({[], head}, fn item, {diffs, prev} ->
+      {[item - prev | diffs], item}
+    end)
+    |> elem(0)
+    |> Enum.reverse()
+  end
+end
+
+Day9Shared.parse(input)
+```
+
+## Part 1
+
+```elixir
+defmodule Day9Part1 do
+  import Day9Shared, except: [parse: 1]
+
+  def solve(values) do
+    values
+    |> Stream.map(&extrapolate/1)
+    |> Stream.map(fn extras ->
+      extras
+      |> Stream.map(&List.last/1)
+      |> Enum.sum()
+    end)
+    |> Enum.sum()
+  end
+end
+
+input
+|> Day9Shared.parse()
+|> Day9Part1.solve()
+
+# 1934898173 is too low
+# 1934898178 is the right answer
+```
+
+## Part 2
+
+```elixir
+defmodule Day9Part2 do
+  import Day9Shared, except: [parse: 1]
+
+  def solve(values) do
+    values
+    |> Stream.map(&extrapolate/1)
+    |> Stream.map(fn extras ->
+      extras
+      |> Enum.map(&hd/1)
+      |> Enum.reverse()
+    end)
+    |> Enum.map(&[0 | &1])
+    |> Enum.map(fn seqs ->
+      Enum.reduce(seqs, 0, fn el, acc -> el - acc end)
+    end)
+    |> Enum.to_list()
+    |> Enum.sum()
+  end
+end
+
+input
+|> Day9Shared.parse()
+|> Day9Part2.solve()
+```

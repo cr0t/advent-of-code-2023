@@ -1,0 +1,294 @@
+# Day 10: Pipe Maze
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.11.3"},
+  {:libgraph, "~> 0.16.0"}
+])
+```
+
+## Input
+
+```elixir
+input = Kino.Input.textarea("Please, paste your input here:")
+```
+
+```elixir
+defmodule Day10Shared do
+  @pipes %{
+    "." => [],
+    "|" => [:north, :south],
+    "-" => [:east, :west],
+    "L" => [:north, :east],
+    "J" => [:north, :west],
+    "7" => [:south, :west],
+    "F" => [:south, :east],
+    "S" => [:north, :east, :south, :west]
+  }
+
+  def parse(input) do
+    input
+    |> Kino.Input.read()
+    |> String.split("\n")
+    |> Enum.with_index()
+    |> Enum.reduce(%{max_x: 0, max_y: 0}, fn {row, y}, map ->
+      row
+      |> String.split("", trim: true)
+      |> Enum.with_index()
+      |> Enum.reduce(map, fn {letter, x}, map ->
+        map
+        |> Map.put({x, y}, {letter, @pipes[letter]})
+        |> Map.update(:max_x, x, &max(&1, x))
+        |> Map.update(:max_y, y, &max(&1, y))
+      end)
+    end)
+    |> then(fn map ->
+      vertices = Map.keys(map)
+      graph = Graph.new() |> Graph.add_vertices(vertices)
+
+      graph =
+        map
+        |> Enum.reject(&(elem(&1, 0) in [:max_x, :max_y]))
+        |> Enum.reduce(graph, fn {from, _}, graph ->
+          edges =
+            from
+            |> connected_to(map)
+            |> Enum.map(fn to -> {from, to} end)
+
+          Graph.add_edges(graph, edges)
+        end)
+
+      {map, graph}
+    end)
+  end
+
+  defp connected_to(coord, map) do
+    coord
+    |> neibs()
+    |> Enum.filter(&connected?(coord, &1, map))
+    |> Enum.map(&elem(&1, 1))
+  end
+
+  defp neibs({x, y}) do
+    [
+      {:to_north, {x, y - 1}},
+      {:to_east, {x + 1, y}},
+      {:to_south, {x, y + 1}},
+      {:to_west, {x - 1, y}}
+    ]
+  end
+
+  defp connected?(node1, {direction, node2}, map) do
+    outs1 = Map.get(map, node1, {nil, []}) |> elem(1)
+    outs2 = Map.get(map, node2, {nil, []}) |> elem(1)
+
+    case direction do
+      :to_north -> Enum.member?(outs1, :north) && Enum.member?(outs2, :south)
+      :to_east -> Enum.member?(outs1, :east) && Enum.member?(outs2, :west)
+      :to_south -> Enum.member?(outs1, :south) && Enum.member?(outs2, :north)
+      :to_west -> Enum.member?(outs1, :west) && Enum.member?(outs2, :east)
+    end
+  end
+
+  def find_start(map) do
+    map
+    |> Enum.find(fn {_, {letter, _}} -> letter == "S" end)
+    |> elem(0)
+  end
+
+  def find_pipe(start, graph) do
+    first =
+      graph
+      |> Graph.neighbors(start)
+      |> hd()
+
+    next(graph, first, start, start, [])
+  end
+
+  defp next(_graph, node, _from, start, path) when node == start,
+    do: Enum.reverse([node | path])
+
+  defp next(graph, node, from, start, path) do
+    next_node =
+      graph
+      |> Graph.neighbors(node)
+      |> Enum.reject(&(&1 == from))
+      |> hd()
+
+    next(graph, next_node, node, start, [node | path])
+  end
+end
+
+Day10Shared.parse(input)
+```
+
+## Part 1
+
+```elixir
+defmodule Day10Part1 do
+  import Day10Shared, only: [find_start: 1, find_pipe: 2]
+
+  def solve({map, graph}) do
+    map
+    |> find_start()
+    |> find_pipe(graph)
+    |> Enum.count()
+    |> Kernel.div(2)
+  end
+end
+
+input
+|> Day10Shared.parse()
+|> Day10Part1.solve()
+```
+
+## Part 2
+
+```elixir
+defmodule Day10Part2 do
+  @workers_n 32
+
+  import Day10Shared, only: [find_start: 1, find_pipe: 2]
+
+  def solve({%{max_x: mx, max_y: my} = map, graph}) do
+    start = find_start(map)
+    pipe = find_pipe(start, graph)
+
+    pipe
+    |> Enum.reduce({[], [], start}, fn to, {side1, side2, from} ->
+      type = type(to, map, graph)
+      s1 = side1(from, to, type)
+      s2 = side2(from, to, type)
+
+      {[s1 | side1], [s2 | side2], to}
+    end)
+    |> then(&pick_inside(&1, pipe, mx, my))
+    |> then(&detect_bubbles(&1, map, pipe))
+    |> Enum.count()
+  end
+
+  # Symbolical "Outside" (in reality it can be opposite, depends on general direction)
+  def side1(from, {x, y} = to, type) do
+    case {direction(from, to), type} do
+      {:from_left, "-"} -> [{x, y - 1}]
+      {:from_right, "-"} -> [{x, y + 1}]
+      {:from_left, "7"} -> [{x, y - 1}, {x + 1, y - 1}, {x + 1, y}]
+      {:from_bottom, "7"} -> [{x - 1, y + 1}]
+      {:from_top, "|"} -> [{x + 1, y}]
+      {:from_bottom, "|"} -> [{x - 1, y}]
+      {:from_top, "J"} -> [{x + 1, y}, {x + 1, y + 1}, {x, y + 1}]
+      {:from_left, "J"} -> [{x - 1, y - 1}]
+      {:from_right, "F"} -> [{x + 1, y + 1}]
+      {:from_bottom, "F"} -> [{x - 1, y}, {x - 1, y - 1}, {x, y - 1}]
+      {:from_top, "L"} -> [{x + 1, y - 1}]
+      {:from_right, "L"} -> [{x - 1, y}, {x - 1, y + 1}, {x, y + 1}]
+    end
+  end
+
+  # Symbolical "Inside" (in reality it can be opposite, depends on general direction)
+  def side2(from, {x, y} = to, type) do
+    case {direction(from, to), type} do
+      {:from_left, "-"} -> [{x, y + 1}]
+      {:from_right, "-"} -> [{x, y - 1}]
+      {:from_left, "7"} -> [{x - 1, y + 1}]
+      {:from_bottom, "7"} -> [{x, y - 1}, {x + 1, y - 1}, {x + 1, y}]
+      {:from_top, "|"} -> [{x - 1, y}]
+      {:from_bottom, "|"} -> [{x + 1, y}]
+      {:from_top, "J"} -> [{x - 1, y - 1}]
+      {:from_left, "J"} -> [{x + 1, y}, {x + 1, y + 1}, {x, y + 1}]
+      {:from_right, "F"} -> [{x - 1, y}, {x - 1, y - 1}, {x, y - 1}]
+      {:from_bottom, "F"} -> [{x + 1, y + 1}]
+      {:from_top, "L"} -> [{x - 1, y}, {x - 1, y + 1}, {x, y + 1}]
+      {:from_right, "L"} -> [{x + 1, y - 1}]
+    end
+  end
+
+  defp direction({fx, fy}, {x, y}) do
+    case {x - fx, y - fy} do
+      {0, 1} -> :from_top
+      {-1, 0} -> :from_right
+      {0, -1} -> :from_bottom
+      {1, 0} -> :from_left
+      _ -> :wtf
+    end
+  end
+
+  # Gets the type of pipe tile (determines S's type according to the neighbors)
+  defp type({x, y} = node, map, graph) do
+    map
+    |> Map.get(node)
+    |> then(fn
+      {letter, _} when letter != "S" ->
+        letter
+
+      {"S", _} ->
+        graph
+        |> Graph.neighbors(node)
+        |> Enum.map(fn {nx, ny} -> {x - nx, y - ny} end)
+        |> Enum.sort()
+        |> case do
+          [{-1, 0}, {0, -1}] ->
+            "F"
+
+          [{0, -1}, {1, 0}] ->
+            "7"
+            # ... the rest is not in my examples, I'm too lazy now
+        end
+    end)
+  end
+
+  # Decide which side is actual inside and which is outside?
+  defp pick_inside({side1, side2, _}, pipe, mx, my) do
+    side1 = unify(side1, pipe)
+    side2 = unify(side2, pipe)
+
+    side1
+    |> Enum.any?(fn {x, y} ->
+      x <= 0 or y <= 0 or (x >= mx or y >= my)
+    end)
+    |> Kernel.if(do: side2, else: side1)
+  end
+
+  # Remove pipe tiles from the "edges"
+  defp unify(side, pipe) do
+    side
+    |> List.flatten()
+    |> Enum.uniq()
+    |> Enum.reject(&(&1 in pipe))
+  end
+
+  # Go farther from the edge to understand what other tiles inside "bubbles"
+  defp detect_bubbles(edge, map, pipe) do
+    edge
+    |> Task.async_stream(
+      fn start_node ->
+        traverse(map, pipe, [start_node], [])
+      end,
+      max_concurrency: @workers_n
+    )
+    |> Enum.flat_map(fn {:ok, bubbles} -> bubbles end)
+    |> Enum.uniq()
+  end
+
+  defp traverse(_map, _pipe, [], visited), do: visited
+
+  defp traverse(map, pipe, [node | to_visit], visited) do
+    next_to_visit =
+      node
+      |> neibs()
+      |> Enum.reject(&(Map.get(map, &1) == nil))
+      |> Enum.reject(&(&1 in visited))
+      |> Enum.reject(&(&1 in pipe))
+
+    traverse(map, pipe, next_to_visit ++ to_visit, [node | visited])
+  end
+
+  defp neibs({x, y}), do: [{x, y - 1}, {x + 1, y}, {x, y + 1}, {x - 1, y}]
+end
+
+input
+|> Day10Shared.parse()
+|> Day10Part2.solve()
+
+# 230 is too small
+```

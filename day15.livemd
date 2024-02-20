@@ -1,0 +1,106 @@
+# Day 15: Lens Library
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.12.0"}
+])
+```
+
+## Input
+
+```elixir
+input = Kino.Input.textarea("Please, paste your input here:")
+```
+
+```elixir
+defmodule Day15Shared do
+  def parse(input) do
+    input
+    |> Kino.Input.read()
+    |> String.split(",", trim: true)
+  end
+
+  def hash(input), do: input |> String.to_charlist() |> hash(0)
+  def hash([], acc), do: acc
+  def hash([char | tail], acc), do: hash(tail, rem((acc + char) * 17, 256))
+end
+
+Day15Shared.parse(input)
+```
+
+## Part 1
+
+```elixir
+defmodule Day15Part1 do
+  import Day15Shared, except: [parse: 1]
+
+  def solve(steps) do
+    steps
+    |> Enum.map(&hash/1)
+    |> Enum.sum()
+  end
+end
+
+input
+|> Day15Shared.parse()
+|> Day15Part1.solve()
+
+# 513643 is right answer
+```
+
+## Part 2
+
+```elixir
+defmodule Day15Part2 do
+  import Day15Shared, except: [parse: 1]
+
+  def solve(steps) do
+    steps
+    |> Enum.map(&parse/1)
+    |> Enum.reduce(%{}, fn
+      {:add, label, box_id, focal_len}, boxes ->
+        Map.update(boxes, box_id, [{label, focal_len}], fn lens ->
+          if Enum.any?(lens, &(elem(&1, 0) == label)) do
+            Enum.map(lens, fn
+              {^label, _} -> {label, focal_len}
+              otherwise -> otherwise
+            end)
+          else
+            [{label, focal_len} | lens]
+          end
+        end)
+
+      {:remove, label, box_id}, boxes ->
+        Map.update(boxes, box_id, [], fn lens ->
+          Enum.reject(lens, &(elem(&1, 0) == label))
+        end)
+    end)
+    |> Enum.map(fn {box_id, lens} ->
+      lens
+      |> Enum.reverse()
+      |> Enum.with_index(1)
+      |> Enum.map(fn {{_, focal_len}, slot_n} ->
+        (box_id + 1) * slot_n * focal_len
+      end)
+    end)
+    |> List.flatten()
+    |> Enum.sum()
+  end
+
+  defp parse(step) do
+    [label, focal_len] = String.split(step, ~r/[-=]/)
+
+    if focal_len == "" do
+      {:remove, label, hash(label)}
+    else
+      {:add, label, hash(label), String.to_integer(focal_len)}
+    end
+  end
+end
+
+input
+|> Day15Shared.parse()
+|> Day15Part2.solve()
+
+# 265345 is the right answer
+```

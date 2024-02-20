@@ -1,0 +1,153 @@
+# Day 21: Step Counter
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.12.0"}
+])
+```
+
+## Input
+
+```elixir
+input = Kino.Input.textarea("Please, paste your input here:")
+```
+
+```elixir
+defmodule Day21Shared do
+  def parse(input) do
+    input
+    |> Kino.Input.read()
+    |> String.split("\n")
+    |> Enum.with_index()
+    |> Enum.reduce(%{max_x: 0, max_y: 0}, fn {row, y}, garden_map ->
+      row
+      |> String.split("", trim: true)
+      |> Enum.with_index()
+      |> Enum.reduce(garden_map, fn {type, x}, garden_map ->
+        garden_map
+        |> Map.put({x, y}, type)
+        |> Map.update(:max_x, x, &max(&1, x))
+        |> Map.update(:max_y, y, &max(&1, y))
+      end)
+    end)
+  end
+
+  def start(map), do: Enum.find(map, fn {_, v} -> v == "S" end) |> elem(0)
+
+  def neibs({x, y}), do: [{x, y - 1}, {x + 1, y}, {x, y + 1}, {x - 1, y}]
+end
+
+Day21Shared.parse(input)
+```
+
+## Part 1
+
+```elixir
+defmodule Day21Part1 do
+  import Day21Shared, except: [parse: 1]
+
+  def solve(garden_map, max_steps \\ 6) do
+    [start(garden_map)]
+    |> reach(garden_map, 0, max_steps)
+    |> Enum.count()
+  end
+
+  defp reach(plots, _, step_n, step_n), do: plots
+
+  defp reach(plots, map, step_n, max_steps) do
+    reachable_plots =
+      plots
+      |> Enum.map(&neibs/1)
+      |> List.flatten()
+      |> Enum.filter(&plot?(&1, map))
+      |> Enum.uniq()
+
+    reach(reachable_plots, map, step_n + 1, max_steps)
+  end
+
+  defp plot?(coord, garden_map) do
+    type = Map.get(garden_map, coord)
+
+    type == "." or type == "S"
+  end
+end
+
+input
+|> Day21Shared.parse()
+|> Day21Part1.solve(64)
+
+# 3585 is the right answer
+```
+
+## Part 2
+
+We can assume that if we indefinitely repeat the same garden map again and again, positions of rocks will be repeating as well.
+
+This repeatitive routine can be traced in the number of newly reachable plots on each step.
+
+However, it's not that simple, as the number of reachable plots will be indefinitely increasing (as we are going further and further from a center). Though, we can dig deeper and search for the repeatitions in the pattern of how many newly reachable plots we find in comparison to the previous step.
+
+Below is an example of such a pattern we find in the demo data. We counted only 100 steps to start noticing it _(real input might take more steps; 500 steps calculated in 42 seconds in one thread)_.
+
+```text
+st46  st57  st68  st79  change
+ -1    -1    -1    -1   => anchor
+ 13    15    17    19   => +2
+  5     7     9    11   => +2
+-15   -17   -19   -21   => -2
+ -5    -7    -9   -11   => -2
+ 16    18    20    22   => +2
+ 11    13    15    17   => +2
+-34   -43   -52   -61   => -9
+ -9   -14   -19   -24   => -5
+ 26    31    36    41   => +5
+ 23    28    33    38   => +5
+```
+
+So, we must try to find these kind of repeatative patterns and use information to calculate the result for the incredible `26501365` number of steps.
+
+```elixir
+defmodule Day21Part2 do
+  import Day21Shared, except: [parse: 1]
+
+  def solve(garden_map) do
+    [start(garden_map)]
+    |> reach([], 0, garden_map, 0, 200)
+  end
+
+  defp reach(plots, _, _, _, step_n, step_n), do: plots
+
+  defp reach(plots, reached, prev_plots_n, map, step_n, max_steps) do
+    reachable_plots =
+      plots
+      |> Enum.map(&neibs/1)
+      |> List.flatten()
+      |> Enum.filter(&plot?(&1, map))
+      |> Enum.uniq()
+
+    new_plots_n = length(reachable_plots -- reached)
+    new_reached = reached ++ reachable_plots
+
+    IO.inspect(new_plots_n - prev_plots_n, label: "step #{step_n}")
+
+    reach(reachable_plots, new_reached, new_plots_n, map, step_n + 1, max_steps)
+  end
+
+  defp plot?(coord, garden_map) do
+    type = infinite_garden(garden_map, coord)
+
+    type == "." or type == "S"
+  end
+
+  defp infinite_garden(%{max_x: mx, max_y: my} = garden_map, {x, y}) do
+    x = Integer.mod(x, mx + 1)
+    y = Integer.mod(y, my + 1)
+
+    Map.get(garden_map, {x, y})
+  end
+end
+
+input
+|> Day21Shared.parse()
+|> Day21Part2.solve()
+```

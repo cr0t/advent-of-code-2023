@@ -1,0 +1,112 @@
+# Day 24: Never Tell Me The Odds
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.12.0"}
+])
+```
+
+## Input
+
+```elixir
+input = Kino.Input.textarea("Please, paste your input here:")
+```
+
+```elixir
+defmodule Day24Shared do
+  def parse(input) do
+    input
+    |> Kino.Input.read()
+    |> String.split("\n")
+    |> Enum.map(fn line ->
+      ~r/(\d+),\s+(\d+),\s+(\d+)\s+@\s+(-?\d+),\s+(-?\d+),\s+(-?\d+)/
+      |> Regex.run(line, capture: :all_but_first)
+      |> Enum.map(&String.to_integer/1)
+    end)
+  end
+end
+
+Day24Shared.parse(input)
+```
+
+## Part 1
+
+```elixir
+defmodule Day24Part1 do
+  def solve(hailstones, min, max) do
+    hailstones =
+      Enum.map(hailstones, fn [px, py, _pz, vx, vy, _vz] ->
+        {{px, py}, {vx, vy}}
+      end)
+
+    for a_stone <- hailstones,
+        b_stone <- hailstones,
+        a_stone != b_stone,
+        uniq: true do
+      Enum.sort([a_stone, b_stone])
+    end
+    |> Enum.map(&cross/1)
+    |> Enum.reject(fn cross_data -> cross_data == {nil, nil} end)
+    |> Enum.reject(fn {_, past_for_a?, past_for_b?} -> past_for_a? or past_for_b? end)
+    |> Enum.reject(fn {{x, y}, _, _} -> x < min or x > max or y < min or y > max end)
+    |> Enum.count()
+  end
+
+  # Based on formula
+  # https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection#Given_two_points_on_each_line
+  defp cross([{{x1, y1}, {vx1, vy1}}, {{x3, y3}, {vx3, vy3}}]) do
+    # find a second point of the line using "velocities"
+    {x2, y2} = {x1 + vx1, y1 + vy1}
+    {x4, y4} = {x3 + vx3, y3 + vy3}
+
+    divisor = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+
+    if divisor == 0 do
+      # both lines are parallel (or identical when divisor is zero)
+      {nil, nil}
+    else
+      cross_x = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / divisor
+      cross_y = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / divisor
+
+      past_for_a? = in_past?({{x1, y2}, {vx1, vy1}}, {cross_x, cross_y})
+      past_for_b? = in_past?({{x3, y3}, {vx3, vy3}}, {cross_x, cross_y})
+
+      {{cross_x, cross_y}, past_for_a?, past_for_b?}
+    end
+  end
+
+  # Checks where the given crossing coordinate is places around the starting point
+  defp in_past?({{x, y}, {vx, vy}}, {cross_x, cross_y}) do
+    (cross_x > x and vx < 0) or
+      (cross_x < x and vx > 0) or
+      (cross_y > y and vy < 0) or
+      (cross_y < y and vy > 0)
+  end
+end
+
+demo_min = 7
+demo_max = 27
+# min = 200_000_000_000_000
+# max = 400_000_000_000_000
+
+input
+|> Day24Shared.parse()
+|> Day24Part1.solve(demo_min, demo_max)
+
+# 26388 is too high
+# 25433 is the right answer!
+```
+
+## Part 2
+
+```elixir
+defmodule Day24Part2 do
+  def solve(hailstones) do
+    hailstones
+  end
+end
+
+input
+|> Day24Shared.parse()
+|> Day24Part2.solve()
+```

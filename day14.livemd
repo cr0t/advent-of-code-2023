@@ -1,0 +1,291 @@
+# Day 14: Parabolic Reflector Dish
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.12.0"}
+])
+```
+
+## Input
+
+```elixir
+input = Kino.Input.textarea("Please, paste your input here:")
+```
+
+```elixir
+defmodule Day14Shared do
+  def parse(input) do
+    input
+    |> Kino.Input.read()
+    |> String.split("\n")
+    |> Enum.with_index()
+    |> Enum.reduce(%{max_x: 0, max_y: 0}, fn {row, y}, map ->
+      row
+      |> String.split("", trim: true)
+      |> Enum.with_index()
+      |> Enum.reduce(map, fn {value, x}, map ->
+        map
+        |> Map.put({x, y}, value)
+        |> Map.update(:max_x, x, &max(&1, x))
+        |> Map.update(:max_y, y, &max(&1, y))
+      end)
+    end)
+  end
+
+  def render(%{max_x: mx, max_y: my} = map) do
+    Enum.map_join(0..my, "\n", fn y ->
+      Enum.map_join(0..mx, "", fn x ->
+        Map.get(map, {x, y}, "?")
+      end)
+    end)
+    |> Kernel.<>("\n---")
+    |> IO.puts()
+
+    map
+  end
+
+  def tilt(%{max_x: mx, max_y: my} = map, tilt_to) when tilt_to in [:north, :south] do
+    {range1, range2} = tilt_ranges(tilt_to, mx, my)
+
+    Enum.reduce(range1, map, fn y, map ->
+      range2
+      |> Enum.filter(&(Map.get(map, {&1, y}) == "O"))
+      |> Enum.reduce(map, fn x, map ->
+        move_rock(tilt_to, x, y, mx, my, map)
+      end)
+    end)
+  end
+
+  def tilt(%{max_x: mx, max_y: my} = map, tilt_to) when tilt_to in [:east, :west] do
+    {range1, range2} = tilt_ranges(tilt_to, mx, my)
+
+    Enum.reduce(range1, map, fn x, map ->
+      range2
+      |> Enum.filter(&(Map.get(map, {x, &1}) == "O"))
+      |> Enum.reduce(map, fn y, map ->
+        move_rock(tilt_to, x, y, mx, my, map)
+      end)
+    end)
+  end
+
+  defp tilt_ranges(:north, mx, my), do: {0..my, 0..mx}
+  defp tilt_ranges(:east, mx, my), do: {mx..0, my..0}
+  defp tilt_ranges(:south, mx, my), do: {my..0, mx..0}
+  defp tilt_ranges(:west, mx, my), do: {0..mx, 0..my}
+
+  def move_rock(tilt_direction, x, y, mx, my, map) do
+    range =
+      case tilt_direction do
+        :north -> y..0
+        :east -> x..mx
+        :south -> y..my
+        :west -> x..0
+      end
+
+    Enum.reduce_while(range, map, fn coord, map ->
+      pos =
+        if tilt_direction in [:north, :south] do
+          {x, coord}
+        else
+          {coord, y}
+        end
+
+      case move(tilt_direction, pos, map) do
+        {:ok, new_pos} ->
+          new_map =
+            map
+            |> Map.put(pos, ".")
+            |> Map.put(new_pos, "O")
+
+          {:cont, new_map}
+
+        {:stuck, _} ->
+          {:halt, map}
+      end
+    end)
+  end
+
+  def load(%{max_x: mx, max_y: my} = map) do
+    my..0
+    |> Enum.with_index(1)
+    |> Enum.reduce(0, fn {y, factor}, total_load ->
+      o_rocks_n = Enum.count(0..mx, fn x -> Map.get(map, {x, y}) == "O" end)
+
+      total_load + o_rocks_n * factor
+    end)
+  end
+
+  defp move(:north, {x, y}, map) do
+    case Map.get(map, {x, y - 1}) do
+      "." -> {:ok, {x, y - 1}}
+      _ -> {:stuck, {x, y}}
+    end
+  end
+
+  defp move(:east, {x, y}, map) do
+    case Map.get(map, {x + 1, y}) do
+      "." -> {:ok, {x + 1, y}}
+      _ -> {:stuck, {x, y}}
+    end
+  end
+
+  defp move(:south, {x, y}, map) do
+    case Map.get(map, {x, y + 1}) do
+      "." -> {:ok, {x, y + 1}}
+      _ -> {:stuck, {x, y}}
+    end
+  end
+
+  defp move(:west, {x, y}, map) do
+    case Map.get(map, {x - 1, y}) do
+      "." -> {:ok, {x - 1, y}}
+      _ -> {:stuck, {x, y}}
+    end
+  end
+
+  def cycle(map) do
+    map
+    |> tilt(:north)
+    # |> render()
+    |> tilt(:west)
+    # |> render()
+    |> tilt(:south)
+    # |> render()
+    |> tilt(:east)
+
+    # |> render()
+  end
+end
+
+Day14Shared.parse(input)
+# |> Day14Shared.cycle()
+# |> Day14Shared.cycle()
+# |> Day14Shared.cycle()
+# |> Day14Shared.render()
+```
+
+## Part 1
+
+```elixir
+defmodule Day14Part1 do
+  import Day14Shared, except: [parse: 1]
+
+  def solve(map) do
+    map
+    |> tilt(:north)
+    # |> render()
+    |> load()
+  end
+end
+
+input
+|> Day14Shared.parse()
+|> Day14Part1.solve()
+```
+
+## Part 2
+
+```elixir
+defmodule Day14Part2 do
+  @lrp_min_length 10
+  @total_steps 1_000_000_000
+
+  import Day14Shared, except: [parse: 1]
+
+  def solve(map, steps \\ 300) do
+    loads =
+      0..steps
+      |> Enum.reduce({map, []}, fn _, {map, loads} ->
+        new_map = cycle(map)
+        load = load(new_map)
+
+        {new_map, [load | loads]}
+      end)
+      |> elem(1)
+      |> Enum.reverse()
+
+    # deltas =
+    #   loads
+    #   |> Enum.chunk_every(2, 1, :discard)
+    #   |> Enum.map(fn [a, b] -> b - a end)
+
+    case lrp(loads) do
+      {:ok, pattern} -> final_load(loads, pattern)
+      {:error, msg} -> msg
+    end
+  end
+
+  @doc """
+  Finds out what is the Longest Recurring Pattern in the given list with the POWER of PCRE!
+  """
+  def lrp(deltas) do
+    stringified = Enum.join(deltas, ",")
+
+    matches =
+      ~r/(?=(.+)\1)/
+      |> Regex.scan(stringified, capture: :all_but_first)
+      |> List.flatten()
+      |> Enum.find(&(String.length(&1) > @lrp_min_length))
+
+    if is_nil(matches) do
+      {:error, "try to increase depth you pass to (but not too much)"}
+    else
+      ptrn = String.split(matches, ",", trim: true) |> Enum.map(&String.to_integer/1)
+      {:ok, ptrn}
+    end
+  end
+
+  @doc """
+  Does a few simple math operations on the given deltas list and recurring pattern we
+  found earlies:
+
+  1. Gets the initial (non-recurring) sequence; we need it's sum and number of items.
+  2. Calculates the sum and number of items in the recurring pattern.
+  3. Finds out the tail piece; also sum of its items.
+  4. Sum all three pieces of data.
+
+  Note on "tail piece".
+
+  There almost always a non-empty tail piece that will be non-full recurring pattern.
+
+  Visually, it might be represented like this:
+
+  [i, n, i, t, s, e, q][p, a, t, t, e, r, n][...][p, a, t, t, e, r, n][p, a, t, t]
+  """
+  def final_load(loads, pattern) do
+    init_seq = initial_sequence(loads, pattern)
+
+    IO.inspect(init_seq, label: "initial_sequence", charlists: :as_lists)
+    IO.inspect(pattern, label: "pattern", charlists: :as_lists)
+
+    init_count = Enum.count(init_seq)
+    pattern_count = Enum.count(pattern)
+    tail_size = rem(@total_steps - init_count, pattern_count)
+
+    pattern
+    |> Enum.take(tail_size)
+    |> List.last()
+  end
+
+  @doc """
+  Finds out where the initial (non-recurring) sequence ends and returns it.
+
+  After this section we will see only recurring pattern repeat one after another.
+  """
+  def initial_sequence(deltas, pattern) do
+    elements =
+      Enum.find(1..length(pattern), fn i ->
+        Enum.drop(deltas, i) |> List.starts_with?(pattern)
+      end)
+
+    Enum.take(deltas, elements)
+  end
+end
+
+input
+|> Day14Shared.parse()
+|> Day14Part2.solve()
+
+# 99669 is wrong answer
+# 99291 is the right answe
+```
